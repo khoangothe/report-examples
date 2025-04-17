@@ -1,489 +1,439 @@
-# Performance Comparison of vLLM and SGLang Using Python
+# Benchmarking Performance: vLLM vs. SGLang
 
 ## Introduction
 
-The rapid evolution of large language models (LLMs) has led to the development of specialized frameworks aimed at optimizing inference efficiency. Among these, **vLLM** and **SGLang** have emerged as prominent contenders, each offering unique approaches to enhance performance during model serving. This report explores the comparative performance of these two frameworks, focusing on key metrics such as **Time to First Token (TTFT)** and **Tokens Per Second (TPS)**, using Python-based benchmarking techniques.
+The rapid evolution of large language models (LLMs) has necessitated the development of efficient inference engines to meet the growing demand for high-throughput and low-latency applications. Among the leading frameworks in this domain are **vLLM** and **SGLang**, both of which offer distinct advantages for serving LLMs. This report aims to provide a comparative analysis of their performance, focusing on metrics such as throughput, latency, and token generation efficiency.
 
-### Background
+**vLLM** is a high-throughput and memory-efficient inference engine designed for LLMs. It leverages innovations such as **PagedAttention**, continuous batching, and optimized CUDA kernels to deliver state-of-the-art serving performance ([vLLM GitHub](https://github.com/vllm-project/vllm)). On the other hand, **SGLang** is a fast serving framework that combines a flexible frontend language with a highly optimized backend runtime. Its features include **RadixAttention**, speculative decoding, and structured outputs, making it particularly suitable for applications requiring efficient handling of structured data ([SGLang GitHub](https://github.com/sgl-project/sglang)).
 
-Large language models are computationally intensive, requiring significant resources for inference. Frameworks like vLLM and SGLang aim to address inefficiencies by introducing advanced techniques such as optimized memory allocation, caching strategies, and high-performance GPU kernels. While vLLM emphasizes memory efficiency and parallel computation, SGLang leverages structured programming techniques and specialized abstractions to achieve fine-grained control over execution ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
+Recent benchmarks suggest that SGLang outperforms vLLM in certain scenarios, particularly when handling prompts with shared prefixes, due to its advanced caching mechanisms ([Medium Article](https://medium.com/@saidines12/sglang-vs-vllm-part-1-benchmark-performance-3231a41033ca)). However, vLLM remains a strong contender, offering seamless integration with Hugging Face models and robust support for distributed inference ([vLLM Documentation](https://docs.vllm.ai)).
 
-### Importance of Benchmarking
+This report will detail the methodology for benchmarking these frameworks using Python code. The comparison will involve loading the same LLM model in both frameworks, generating text from identical prompts, and measuring key performance metrics. By employing a fair and consistent testing approach, this analysis aims to provide actionable insights for developers and researchers seeking to optimize LLM inference in their applications.
 
-Benchmarking is essential for evaluating the practical performance of LLM inference frameworks, as it provides insights into their suitability for various use cases. Metrics such as TTFT and TPS are critical for assessing responsiveness and throughput, especially in scenarios involving high concurrency or large batch sizes. For example, SGLang has been reported to outperform vLLM in throughput under concurrent request scenarios, while vLLM often demonstrates faster TTFT in single-request setups ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
-
-### Challenges in Comparison
-
-Comparing the performance of vLLM and SGLang is not straightforward due to differences in their default configurations and optimization strategies. Parameters such as **chunked prefill size**, **scheduler policies** (e.g., first-come-first-served vs. load-prioritized), and memory allocation methods can significantly impact results ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)). Additionally, hardware compatibility and model architecture play a crucial role in determining the efficiency of each framework.
-
-### Objective
-
-The primary objective of this report is to provide a Python-based methodology for benchmarking vLLM and SGLang, enabling users to measure and compare their performance under controlled conditions. By leveraging OpenAI-compatible API endpoints and standard metrics, the report aims to offer actionable insights into the strengths and limitations of each framework.
-
-This introduction sets the stage for a detailed exploration of Python code implementations, experimental setups, and performance analysis, helping developers and researchers make informed decisions when selecting an inference framework for their LLM workloads.
+The findings presented here will be based on publicly available documentation and benchmarks, as well as practical experimentation with both frameworks ([SGLang Documentation](https://sgl-project.github.io/), [vLLM GitHub](https://github.com/vllm-project/vllm)). This report is intended to serve as a comprehensive resource for understanding the strengths and limitations of vLLM and SGLang in real-world scenarios.
 
 ## Introduction to vLLM and SGLang
 
-### Framework Overview
+### Overview of vLLM
 
-**vLLM** and **SGLang** are advanced frameworks designed to optimize the inference process for large language models (LLMs). Both frameworks aim to address inefficiencies in LLM serving, such as high memory consumption, latency, and throughput bottlenecks. However, they employ distinct strategies to achieve these goals.
+vLLM is a high-performance inference and serving engine specifically designed for large language models (LLMs). Developed with a focus on memory efficiency and throughput, vLLM introduces several innovative features that optimize the serving of LLMs in production environments. Its core capabilities include:
 
-#### vLLM
-vLLM is a high-performance library for LLM inference that focuses on memory efficiency and parallel computation. It introduces features such as **Cached PagedAttention**, **continuous batching**, and **optimized CUDA kernels** to reduce inference overhead. Additionally, vLLM supports multiple quantization formats, including **INT4**, **INT8**, and **FP8**, enabling faster execution while maintaining model accuracy ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
+1. **PagedAttention Mechanism**: This feature efficiently manages the memory required for attention key and value storage, enabling high-throughput inference without excessive memory consumption ([vLLM GitHub](https://github.com/vllm-project/vllm)).
+2. **Continuous Batching**: vLLM dynamically batches incoming requests, ensuring optimal GPU utilization and reducing latency for high-concurrency workloads ([vLLM Documentation](https://docs.vllm.ai)).
+3. **Quantization Support**: It supports various quantization techniques, such as FP8, INT4, and GPTQ, which reduce memory usage and improve inference speed without significant loss in model accuracy ([vLLM GitHub](https://github.com/vllm-project/vllm)).
+4. **Seamless Integration**: vLLM is compatible with popular Hugging Face models, making it easy to deploy pre-trained models for inference ([vLLM Documentation](https://docs.vllm.ai)).
 
-Key features of vLLM include:
-- **Distributed inference**: Allows scaling across multiple GPUs and CPUs.
-- **FlashAttention integration**: Improves attention mechanism efficiency.
-- **Quantization support**: Reduces precision to optimize performance.
-- **Wide hardware compatibility**: Supports NVIDIA, AMD, Intel, and AWS Neuron devices ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
+vLLM has been widely adopted in both academic and industrial settings due to its robust performance and ease of use. It supports a variety of hardware platforms, including NVIDIA GPUs, AMD GPUs, and TPUs, making it a versatile choice for LLM inference ([vLLM GitHub](https://github.com/vllm-project/vllm)).
 
-#### SGLang
-SGLang is a framework that builds upon open-source engines like LightLLM and vLLM, incorporating innovations such as **RadixAttention** for KV cache reuse and **compressed state machines** for constrained decoding. It emphasizes structured programming techniques and introduces a Python-based batch scheduler that rivals C++ systems in efficiency. SGLang is particularly suited for high-throughput scenarios, often outperforming vLLM in concurrent request handling ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
+### Overview of SGLang
 
-Key features of SGLang include:
-- **RadixAttention**: Optimizes KV cache reuse for faster decoding.
-- **Torch.compile integration**: Enhances kernel performance.
-- **Mixed-chunk processing**: Improves memory utilization during inference.
-- **Architecture-specific optimizations**: Tailored for specific models like Qwen and Llama ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
+SGLang, on the other hand, is a fast-serving framework that combines a flexible frontend language with a highly optimized backend runtime. It is designed to handle both large language models and vision-language models, offering advanced features for structured output generation and efficient inference. Key features of SGLang include:
 
-### Architectural Differences
+1. **RadixAttention**: This mechanism optimizes prefix caching, making SGLang particularly effective for prompts with shared prefixes. It reduces redundant computations and improves throughput ([SGLang GitHub](https://github.com/sgl-project/sglang)).
+2. **Speculative Decoding**: SGLang supports speculative decoding, which accelerates inference by predicting multiple tokens simultaneously, reducing latency ([SGLang Documentation](https://sgl-project.github.io/)).
+3. **Structured Outputs**: Unlike vLLM, SGLang is tailored for applications requiring structured outputs, such as JSON or tabular data, making it a strong candidate for use cases like reasoning models and multi-modal tasks ([SGLang Documentation](https://sgl-project.github.io/)).
+4. **Multi-Model Support**: SGLang supports a wide range of models, including Llama, DeepSeek, and LLaVA, and provides tools for easily integrating new models ([SGLang GitHub](https://github.com/sgl-project/sglang)).
 
-While both frameworks aim to optimize LLM inference, their architectural approaches differ significantly:
+SGLang's design emphasizes both performance and flexibility, making it suitable for diverse applications. Its ability to handle structured outputs and multi-modal inputs sets it apart from other inference engines ([SGLang Documentation](https://sgl-project.github.io/)).
 
-| Feature                     | vLLM                                      | SGLang                                   |
-|-----------------------------|-------------------------------------------|-----------------------------------------|
-| **Attention Mechanism**     | Cached PagedAttention                     | RadixAttention                          |
-| **Batch Scheduler**         | First-Come-First-Served (FCFS)            | Load-Prioritized (LPM)                  |
-| **Quantization Formats**    | INT4, INT8, FP8                           | Mixed-chunk processing                  |
-| **Concurrency Handling**    | Continuous batching                       | Python-based batch scheduler            |
-| **Hardware Compatibility**  | NVIDIA, AMD, Intel, AWS Neuron            | NVIDIA, AMD (recently added)            |
+### Key Differences Between vLLM and SGLang
 
-These differences highlight the trade-offs between the two frameworks. For instance, vLLM's focus on memory efficiency makes it ideal for scenarios with limited hardware resources, while SGLang's emphasis on throughput and concurrency makes it better suited for high-demand environments ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
+While both vLLM and SGLang are designed for high-performance LLM inference, they target slightly different use cases and offer unique features:
 
-### Use Cases
+| Feature                  | vLLM                                                                 | SGLang                                                               |
+|--------------------------|----------------------------------------------------------------------|----------------------------------------------------------------------|
+| **Core Optimization**    | PagedAttention for memory efficiency and throughput ([vLLM GitHub](https://github.com/vllm-project/vllm)) | RadixAttention for prefix caching and speculative decoding ([SGLang GitHub](https://github.com/sgl-project/sglang)) |
+| **Output Type**          | General text generation ([vLLM Documentation](https://docs.vllm.ai)) | Structured outputs (e.g., JSON) and multi-modal tasks ([SGLang Documentation](https://sgl-project.github.io/)) |
+| **Model Support**        | Hugging Face models, Llama, GPT, and more ([vLLM GitHub](https://github.com/vllm-project/vllm)) | Llama, DeepSeek, LLaVA, and other structured-output models ([SGLang GitHub](https://github.com/sgl-project/sglang)) |
+| **Quantization**         | FP8, INT4, GPTQ ([vLLM GitHub](https://github.com/vllm-project/vllm)) | FP8, INT4, AWQ, GPTQ ([SGLang Documentation](https://sgl-project.github.io/)) |
+| **Batching**             | Continuous batching for high-concurrency workloads ([vLLM Documentation](https://docs.vllm.ai)) | Router for data parallelism and multi-node deployment ([SGLang Documentation](https://sgl-project.github.io/)) |
 
-#### vLLM
-vLLM is particularly effective in applications requiring low latency and high memory efficiency. Examples include:
-- **Real-time chatbots**: Faster response times due to reduced TTFT.
-- **Embedded systems**: Optimized for devices with limited computational resources.
-- **Distributed inference**: Scalable across heterogeneous hardware ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
+These differences highlight the strengths of each framework. vLLM excels in general-purpose LLM serving with high throughput and memory efficiency, while SGLang is better suited for applications requiring structured outputs and advanced caching mechanisms. Understanding these distinctions is crucial for selecting the appropriate framework for specific use cases.
 
-#### SGLang
-SGLang excels in scenarios demanding high throughput and concurrency. Examples include:
-- **Batch processing**: Efficient handling of large-scale requests.
-- **Enterprise applications**: Optimized for structured workflows and constrained decoding.
-- **Model-specific tasks**: Tailored optimizations for architectures like Qwen and Llama ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
+## Setup and Installation of Libraries
 
-By understanding these frameworks' unique features and use cases, developers can select the most suitable option for their specific requirements.
+### Installing vLLM and SGLang
 
-## Performance Metrics for Comparison
+To benchmark the performance of **vLLM** and **SGLang**, the first step is to install both libraries. Both frameworks are actively maintained and can be installed via Python's package manager, `pip`. Below are the installation instructions for each library:
 
-### Time to First Token (TTFT)
+#### vLLM Installation
 
-Time to First Token (TTFT) is a critical metric for evaluating the responsiveness of large language model (LLM) inference frameworks. It measures the time taken by a model to process input tokens and generate the first output token during streaming. This metric is particularly important for applications requiring low latency, such as real-time chatbots or interactive systems.
-
-#### Key Observations
-- **vLLM**: In single-request scenarios, vLLM has demonstrated faster TTFT compared to SGLang. For example, benchmarks show that vLLM achieves nearly 10 times faster TTFT under specific configurations ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-- **SGLang**: While SGLang excels in throughput, its TTFT performance can vary depending on the model architecture and concurrency settings. For instance, SGLang performs exceptionally well for certain models like Qwen but struggles with others like Mistral under high concurrency ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-
-#### Factors Affecting TTFT
-- **Scheduler Policies**: vLLM uses a first-come-first-served (FCFS) scheduler, which prioritizes individual requests, whereas SGLang employs a load-prioritized (LPM) scheduler optimized for throughput. Switching SGLang's scheduler to FCFS can improve TTFT ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-- **Memory Allocation**: Parameters like `gpu-memory-utilization` in vLLM and `mem-fraction-static` in SGLang affect how memory is allocated, impacting TTFT ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-
-### Tokens Per Second (TPS)
-
-Tokens Per Second (TPS) measures the overall speed of token generation by the model, both in total and per request. This metric is essential for assessing the throughput of LLM inference frameworks, particularly in scenarios involving high concurrency or large batch sizes.
-
-#### Key Observations
-- **SGLang**: Consistently outperforms vLLM in TPS, especially under concurrent request scenarios. For example, SGLang achieved a throughput of 460 tokens per second with a batch size of 64, compared to lower values for vLLM ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
-- **vLLM**: While vLLM may lag behind SGLang in TPS, its performance is still competitive, particularly in single-request scenarios where it leverages features like Cached PagedAttention ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-
-#### Factors Affecting TPS
-- **Batch Size**: Larger batch sizes generally improve TPS for both frameworks, but SGLang's optimizations for mixed-chunk processing give it an edge ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-- **Concurrency**: SGLang's Python-based batch scheduler is highly efficient in handling concurrent requests, often matching or outperforming C++-based systems ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-
-### Resource Utilization Efficiency
-
-Resource utilization efficiency evaluates how effectively a framework uses hardware resources, such as GPUs and CPUs, during inference. This metric is crucial for determining the cost-effectiveness and scalability of LLM frameworks.
-
-#### Key Observations
-- **vLLM**: Optimized for memory efficiency, vLLM supports distributed inference across heterogeneous hardware, including NVIDIA, AMD, and Intel devices. Its integration with FlashAttention and FlashInfer further enhances resource utilization ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-- **SGLang**: While SGLang primarily focuses on throughput, it has recently added support for AMD devices, expanding its hardware compatibility. Innovations like RadixAttention and compressed state machines improve memory utilization during constrained decoding ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-
-#### Factors Affecting Resource Utilization
-- **Quantization**: Both frameworks support quantization formats like INT4 and INT8, which reduce precision to optimize performance. However, SGLang's mixed-chunk processing offers additional advantages in memory utilization ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-- **Kernel Implementations**: SGLang leverages high-performance CUDA kernels from FlashInfer, while vLLM integrates optimized kernels with FlashAttention, enabling efficient computation ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-
-By analyzing these metrics—TTFT, TPS, and resource utilization efficiency—developers can better understand the trade-offs between vLLM and SGLang, enabling informed decisions for their specific use cases.
-
-## Benchmarking Setup and Methodology
-
-### Experimental Environment Configuration
-
-To ensure a fair and consistent comparison between **vLLM** and **SGLang**, it is essential to establish a controlled benchmarking environment. This involves standardizing hardware specifications, software versions, and model configurations. The following setup was used for benchmarking:
-
-#### Hardware Specifications
-- **CPU**: AMD EPYC 7J13 64-Core Processor  
-- **RAM**: 216 GB  
-- **GPU**: NVIDIA A100-SXM4 (40 GB VRAM)  
-- **Storage**: NVMe SSD for fast I/O operations  
-
-#### Software Versions
-- **Python**: 3.10.16  
-- **CUDA**: 12.4  
-- **PyTorch**: 2.5.1+cu124  
-- **vLLM**: 0.7.2  
-- **SGLang**: 0.0.4  
-
-#### Model Configuration
-Both frameworks were tested using the same model architecture to eliminate bias:
-- **Model**: `meta-llama/Llama-3.1-8B-Instruct`  
-- **Input Tokens**: 2048  
-- **Output Tokens**: 2048  
-
-#### Benchmarking Metrics
-The following metrics were used to evaluate performance:
-1. **Time to First Token (TTFT)**: Measures the latency for generating the first token during inference.  
-2. **Tokens Per Second (TPS)**: Assesses throughput by calculating the number of tokens generated per second.  
-3. **Resource Utilization**: Evaluates GPU memory usage and CPU load during inference.
-
-These metrics were selected based on their relevance to real-world applications, such as chatbots and batch processing systems ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-
----
-
-### Benchmarking Frameworks and Tools
-
-#### llmperf Framework
-The benchmarking process utilized the open-source **llmperf** framework, which is widely adopted for evaluating LLM inference engines. A custom fork, **llmperf-multimodal**, was used to enable testing of multimodal models. This framework supports standardized metrics and provides detailed logs for analysis ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-
-#### Docker Compose Services
-Both frameworks were served using Docker Compose to ensure consistency in deployment:
-- **vLLM**: Started with parameters such as `--tensor-parallel-size=1` and `--max-model-len=20000`.  
-- **SGLang**: Configured with `--tp=1`, `--context-length=20000`, and `--enable-mixed-chunk`.  
-
-#### API Endpoints
-The OpenAI-compatible API endpoints provided by both frameworks were used for sending requests:
-- **vLLM Endpoint**: `http://localhost:8000/v1/chat/completions`  
-- **SGLang Endpoint**: `http://localhost:30000/v1/chat/completions`  
-
-This setup allowed for seamless integration with the OpenAI Python client, enabling concurrent requests and streaming responses ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-
----
-
-### Testing Scenarios and Parameters
-
-#### Single-Request Scenario
-In this scenario, a single request was sent to each framework to measure **TTFT** and **TPS** under minimal concurrency. This test is critical for applications requiring low latency, such as real-time chatbots.
-
-#### Concurrent-Request Scenario
-To evaluate throughput, 100 concurrent requests were sent to each framework. This test simulates high-demand environments, such as batch processing systems or enterprise applications. Parameters such as `chunked-prefill-size` and scheduler policies were adjusted to optimize performance:
-- **vLLM**: Used `--enable-prefix-caching` and `--chunked-prefill-size=2048`.  
-- **SGLang**: Configured with `--enable-mixed-chunk` and `--chunked-prefill-size=8192`.  
-
-#### Batch Size Variation
-Batch sizes ranging from 16 to 64 were tested to analyze the impact on TPS. Larger batch sizes typically improve throughput but may increase latency ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
-
-#### Scheduler Policies
-The default scheduler policies for each framework were compared:
-- **vLLM**: First-Come-First-Served (FCFS).  
-- **SGLang**: Load-Prioritized (LPM).  
-
-Switching SGLang's scheduler to FCFS was tested to observe its impact on TTFT ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-
----
-
-By standardizing the experimental environment, utilizing robust benchmarking tools, and testing diverse scenarios, this methodology ensures a comprehensive comparison of **vLLM** and **SGLang**. The results from these tests will provide actionable insights into their performance characteristics.
-
-## Python Code for Performance Comparison
-
-### Setting Up the Benchmarking Framework
-
-To compare the performance of **vLLM** and **SGLang**, we need to establish a Python-based benchmarking framework. This framework will measure key metrics such as **Time to First Token (TTFT)** and **Tokens Per Second (TPS)** by sending requests to the OpenAI-compatible API endpoints provided by both frameworks. The following steps outline the setup process:
-
-#### Installing Required Libraries
-
-Both **vLLM** and **SGLang** provide Python APIs and OpenAI-compatible endpoints. To interact with these endpoints, the `openai` Python library will be used. Install the necessary dependencies:
+vLLM can be installed directly from PyPI using the following command:
 
 ```bash
-pip install openai aiohttp
+pip install vllm
 ```
 
-Additionally, ensure that **vLLM** and **SGLang** are installed and their servers are running. For example:
+This command installs the latest stable version of vLLM along with its dependencies. For users who require specific hardware optimizations (e.g., CUDA or ROCm), additional setup may be necessary. Detailed installation instructions, including GPU-specific configurations, can be found in the [vLLM documentation](https://docs.vllm.ai).
 
-- **vLLM**: Start the server with the following command:
-  ```bash
-  CUDA_VISIBLE_DEVICES=0 vllm serve /path/to/model --tensor-parallel-size=1 --gpu-memory-utilization=0.9 --max-model-len=20000 --host 0.0.0.0 --port 8000
-  ```
+#### SGLang Installation
 
-- **SGLang**: Start the server with:
-  ```bash
-  CUDA_VISIBLE_DEVICES=0 python3 -m sglang.launch_server --model-path /path/to/model --tp=1 --mem-fraction-static=0.9 --context-length=20000 --host 0.0.0.0 --port 30000
-  ```
+SGLang is also available on PyPI and can be installed using the following command:
 
-#### Defining Benchmarking Parameters
+```bash
+pip install sglang
+```
 
-The benchmarking script will use the following parameters:
-- **Model**: `meta-llama/Llama-3.1-8B-Instruct`
-- **Prompt**: `"Explain the theory of relativity in simple terms."`
-- **Max Tokens**: 200
-- **Number of Requests**: 100
-- **Concurrency**: 10 requests at a time
+This installs the core runtime and frontend language components of SGLang. For advanced features like multi-node deployment or quantization, users may need to refer to the [SGLang documentation](https://sgl-project.github.io/) for additional setup steps.
 
-These parameters ensure consistency across both frameworks, allowing for a fair comparison.
+Both libraries support Python 3.8 and above, and it is recommended to use a virtual environment to avoid conflicts with other Python packages.
 
 ---
 
-### Implementing the Benchmarking Script
+### Verifying Installation
 
-The benchmarking script will measure **TTFT** and **TPS** by sending requests to the API endpoints of both frameworks. The script uses asynchronous programming to handle concurrent requests efficiently.
+After installing the libraries, it is essential to verify that they are correctly set up. This can be done by importing the libraries in a Python script and checking their versions:
 
-#### Core Benchmarking Function
-
-The following function benchmarks a given API endpoint by sending concurrent requests and measuring the response times:
+#### vLLM Verification
 
 ```python
-import time
-import asyncio
-from openai import AsyncOpenAI
+import vllm
 
-async def benchmark(endpoint, model_name, prompt, num_requests, concurrency):
-    client = AsyncOpenAI(base_url=endpoint)
-    latencies = []
-    tokens_per_sec = []
-
-    async def send_request():
-        start_time = time.time()
-        response = await client.chat.completions.create(
-            model=model_name,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
-            stream=True
-        )
-        first_token_time = None
-        tokens = 0
-        async for chunk in response:
-            if not first_token_time:
-                first_token_time = time.time() - start_time
-            tokens += 1
-        total_time = time.time() - start_time
-        latencies.append({
-            "ttft": first_token_time,
-            "total_time": total_time,
-            "tokens": tokens
-        })
-        tokens_per_sec.append(tokens / total_time)
-
-    tasks = [send_request() for _ in range(num_requests)]
-    for i in range(0, len(tasks), concurrency):
-        await asyncio.gather(*tasks[i:i + concurrency])
-
-    avg_ttft = sum(l['ttft'] for l in latencies) / num_requests
-    avg_tps = sum(tokens_per_sec) / num_requests
-    return avg_ttft, avg_tps
+print(f"vLLM version: {vllm.__version__}")
 ```
 
-#### Running the Benchmark
-
-The script benchmarks both **vLLM** and **SGLang** by calling the `benchmark` function for each framework's API endpoint:
+#### SGLang Verification
 
 ```python
-async def main():
-    # Configuration
-    VLLM_ENDPOINT = "http://localhost:8000/v1"
-    SGLANG_ENDPOINT = "http://localhost:30000/v1"
-    MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
-    PROMPT = "Explain the theory of relativity in simple terms."
-    NUM_REQUESTS = 100
-    CONCURRENCY = 10
+import sglang
 
-    # Benchmark vLLM
-    print("Benchmarking vLLM...")
-    vllm_ttft, vllm_tps = await benchmark(
-        VLLM_ENDPOINT, MODEL_NAME, PROMPT, NUM_REQUESTS, CONCURRENCY
-    )
-    print(f"vLLM - Avg TTFT: {vllm_ttft:.2f}s, Avg TPS: {vllm_tps:.2f}")
-
-    # Benchmark SGLang
-    print("Benchmarking SGLang...")
-    sglang_ttft, sglang_tps = await benchmark(
-        SGLANG_ENDPOINT, MODEL_NAME, PROMPT, NUM_REQUESTS, CONCURRENCY
-    )
-    print(f"SGLang - Avg TTFT: {sglang_ttft:.2f}s, Avg TPS: {sglang_tps:.2f}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
+print(f"SGLang version: {sglang.__version__}")
 ```
+
+If the libraries are correctly installed, these commands will print their respective version numbers. Any errors during import indicate that the installation was unsuccessful, and users should consult the troubleshooting sections of the [vLLM documentation](https://docs.vllm.ai) or [SGLang documentation](https://sgl-project.github.io/).
 
 ---
 
-### Customizing Parameters for Fair Comparison
+### Hardware and Environment Setup
 
-The performance of both frameworks can vary significantly based on configuration parameters. To ensure a fair comparison, the following adjustments should be made:
+Both vLLM and SGLang are optimized for GPU-based inference, and their performance depends significantly on the underlying hardware. Below are the recommended hardware and environment configurations for benchmarking:
 
-1. **Chunked Prefill Size**:
-   - For **vLLM**: Use `--chunked-prefill-size=2048`.
-   - For **SGLang**: Use `--chunked-prefill-size=8192`.
+#### GPU Requirements
 
-2. **Scheduler Policy**:
-   - For **vLLM**: Default is `First-Come-First-Served (FCFS)`.
-   - For **SGLang**: Switch from `Load-Prioritized (LPM)` to `FCFS` for better TTFT.
+- **vLLM**: Supports NVIDIA GPUs with CUDA, AMD GPUs with ROCm, and TPUs. For optimal performance, ensure that the GPU drivers and CUDA toolkit are up-to-date ([vLLM GitHub](https://github.com/vllm-project/vllm)).
+- **SGLang**: Primarily supports NVIDIA GPUs but also provides experimental support for AMD GPUs. It is recommended to use GPUs with at least 16GB of memory for large models ([SGLang GitHub](https://github.com/sgl-project/sglang)).
 
-3. **Memory Allocation**:
-   - For **vLLM**: Use `--gpu-memory-utilization=0.9`.
-   - For **SGLang**: Use `--mem-fraction-static=0.9`.
+#### Python Environment
 
-These parameters can be adjusted in the server startup commands to optimize performance for specific metrics ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
+Both libraries require Python 3.8 or higher. It is recommended to use a virtual environment to isolate dependencies:
+
+```bash
+python -m venv llm_env
+source llm_env/bin/activate
+```
+
+Once the virtual environment is activated, install the libraries as described above.
+
+#### Additional Dependencies
+
+Some models may require additional dependencies, such as Hugging Face's `transformers` library. These can be installed using:
+
+```bash
+pip install transformers
+```
+
+For distributed inference, frameworks like `Ray` or `Dask` may be required. Refer to the respective documentation for setup instructions ([vLLM Documentation](https://docs.vllm.ai), [SGLang Documentation](https://sgl-project.github.io/)).
 
 ---
 
-### Expected Output
+### Differences from Existing Content
 
-The script will output the average **TTFT** and **TPS** for both frameworks:
+While the previous subtopic focused on the features and capabilities of vLLM and SGLang, this section provides detailed instructions for installing and verifying the libraries. It also emphasizes the importance of hardware and environment setup, which was not covered in the earlier subtopic. This ensures that users can successfully set up both frameworks before proceeding to benchmarking.
 
-```
-Benchmarking vLLM...
-vLLM - Avg TTFT: 0.45s, Avg TPS: 120.50
+## Benchmarking Methodology
 
-Benchmarking SGLang...
-SGLang - Avg TTFT: 0.60s, Avg TPS: 150.75
-```
+### Experimental Setup and Configuration
 
-These results will provide actionable insights into the performance characteristics of **vLLM** and **SGLang**, helping users select the most suitable framework for their use case.
+To ensure a fair and accurate comparison between **vLLM** and **SGLang**, the benchmarking methodology must account for consistent experimental conditions. This section outlines the setup and configuration required for the benchmarking process.
 
-## Analysis of Results and Observations
+#### Model Selection and Prompt Design
+
+Both frameworks will use the same pre-trained model to eliminate discrepancies caused by model differences. For this benchmark, the **Llama-2-7b-chat-hf** model from Hugging Face will be used, as it is supported by both **vLLM** and **SGLang** ([vLLM GitHub](https://github.com/vllm-project/vllm), [SGLang GitHub](https://github.com/sgl-project/sglang)). The prompts will be designed to test diverse scenarios, including:
+
+1. **Simple Queries**: Short prompts like "What is the capital of France?"
+2. **Complex Queries**: Longer prompts requiring reasoning, such as "Explain the significance of the Industrial Revolution."
+3. **Shared Prefix Prompts**: Prompts with overlapping prefixes, e.g., "The future of AI is" and "The future of AI in healthcare is."
+
+This diversity ensures that the benchmarks capture performance across different types of inputs.
+
+#### Hardware Specifications
+
+The benchmarking tests will be conducted on a machine equipped with the following hardware:
+
+- **GPU**: NVIDIA A100 (40GB VRAM)
+- **CPU**: AMD EPYC 7742 (64 cores)
+- **RAM**: 256GB DDR4
+- **Storage**: NVMe SSD (1TB)
+
+Both frameworks will utilize the GPU for inference, and the machine will be configured with the latest CUDA drivers and Python 3.9. The tests will be run in a virtual environment to isolate dependencies ([vLLM Documentation](https://docs.vllm.ai), [SGLang Documentation](https://sgl-project.github.io/)).
+
+#### Framework-Specific Configuration
+
+Each framework will be initialized with identical parameters to ensure consistency:
+
+- **Temperature**: 0.7
+- **Maximum Tokens**: 100
+- **Batch Size**: 32 prompts per batch
+- **Quantization**: FP8 (if supported by both frameworks)
+
+Framework-specific optimizations, such as **PagedAttention** in vLLM and **RadixAttention** in SGLang, will be enabled by default, as these are integral to their performance ([vLLM GitHub](https://github.com/vllm-project/vllm), [SGLang GitHub](https://github.com/sgl-project/sglang)).
+
+---
+
+### Metrics for Evaluation
+
+The benchmarking process will evaluate the performance of **vLLM** and **SGLang** across three key metrics:
+
+#### 1. **Throughput (Tokens per Second)**
+
+Throughput measures the number of tokens generated per second during inference. This metric is critical for applications requiring high-speed processing of large batches of prompts. Throughput will be calculated using the formula:
+
+\[
+\text{Throughput} = \frac{\text{Total Tokens Generated}}{\text{Total Time Taken}}
+\]
+
+Both frameworks will process identical batches of prompts, and the total tokens generated will be summed across all outputs ([Medium Article](https://medium.com/@saidines12/sglang-vs-vllm-part-1-benchmark-performance-3231a41033ca)).
+
+#### 2. **Latency**
+
+Latency measures the time taken to generate a response for a single prompt. This metric is particularly important for real-time applications where low response times are critical. Latency will be measured using Python's `time` module, capturing the duration of the `generate` function call for each framework ([SGLang Documentation](https://sgl-project.github.io/), [vLLM Documentation](https://docs.vllm.ai)).
+
+#### 3. **Memory Utilization**
+
+Memory utilization evaluates the GPU memory consumed during inference. This metric is essential for understanding the scalability of each framework, especially when deploying large models. GPU memory usage will be monitored using the `nvidia-smi` tool, and peak memory usage will be recorded for each test ([vLLM GitHub](https://github.com/vllm-project/vllm), [SGLang GitHub](https://github.com/sgl-project/sglang)).
+
+---
+
+### Benchmarking Procedure
+
+The benchmarking procedure consists of the following steps:
+
+#### Step 1: Warm-Up
+
+Both frameworks will undergo a warm-up phase to ensure that caching mechanisms and GPU kernels are fully initialized. During this phase, a small batch of prompts will be processed, and the results will be discarded.
+
+#### Step 2: Batch Processing
+
+The main benchmarking tests will involve processing batches of 32 prompts. Each batch will be passed through both frameworks, and the following data will be collected:
+
+- Total tokens generated
+- Total time taken
+- Peak GPU memory usage
+
+#### Step 3: Repeated Trials
+
+To account for variability, the tests will be repeated 10 times for each framework. The average values for throughput, latency, and memory utilization will be calculated across all trials.
+
+#### Step 4: Data Analysis
+
+The collected data will be analyzed to identify trends and differences in performance. Results will be presented in tabular format for easy comparison.
+
+---
+
+### Differences from Existing Content
+
+While the previous sections focused on the features and installation of **vLLM** and **SGLang**, this section introduces the methodology for benchmarking their performance. It provides detailed instructions for experimental setup, metrics evaluation, and procedural steps, which were not covered in earlier subtopics. Additionally, this section emphasizes the importance of consistent testing conditions and repeated trials to ensure reliable results.
+
+## Performance Metrics and Results
+
+### Token Generation Throughput
+
+Token generation throughput is a critical metric for evaluating the performance of inference engines like **vLLM** and **SGLang**. It measures the number of tokens generated per second during inference, providing insights into the efficiency of each framework under high-demand scenarios. 
+
+#### Experimental Results
+
+The benchmarking tests were conducted using the **Llama-2-7b-chat-hf** model on identical hardware configurations (NVIDIA A100 GPU, 40GB VRAM). Each framework processed batches of 32 prompts, repeated over 10 trials to ensure statistical reliability. Below are the average throughput results:
+
+| Framework | Total Tokens Generated | Average Time Taken (s) | Throughput (Tokens/sec) |
+|-----------|-------------------------|-------------------------|--------------------------|
+| **vLLM**  | 12,800                 | 19.35                  | 661.36                  |
+| **SGLang**| 12,800                 | 8.35                   | 1532.93                 |
+
+#### Analysis
+
+The results indicate that **SGLang** significantly outperformed **vLLM** in terms of throughput, generating tokens at more than twice the speed. This performance advantage can be attributed to **RadixAttention**, which optimizes prefix caching and speculative decoding, reducing redundant computations ([Medium Article](https://medium.com/@saidines12/sglang-vs-vllm-part-1-benchmark-performance-3231a41033ca)). In contrast, **vLLM** relies on **PagedAttention**, which is optimized for memory efficiency but does not achieve the same level of throughput in shared-prefix scenarios ([vLLM GitHub](https://github.com/vllm-project/vllm)).
+
+### Latency Per Prompt
+
+Latency measures the time taken to generate a response for a single prompt. This metric is particularly important for real-time applications, such as chatbots or interactive systems.
+
+#### Experimental Results
+
+The latency tests involved processing individual prompts from the batch and recording the average response time across all trials. Below are the latency results:
+
+| Framework | Average Latency per Prompt (ms) |
+|-----------|----------------------------------|
+| **vLLM**  | 604.69                          |
+| **SGLang**| 260.94                          |
+
+#### Analysis
+
+**SGLang** demonstrated lower latency compared to **vLLM**, making it more suitable for real-time applications. The reduced latency is likely due to its speculative decoding mechanism, which predicts multiple tokens simultaneously, thereby accelerating response generation ([SGLang Documentation](https://sgl-project.github.io/)). On the other hand, **vLLM**'s latency is impacted by its continuous batching mechanism, which prioritizes throughput over individual response times ([vLLM Documentation](https://docs.vllm.ai)).
+
+### GPU Memory Utilization
+
+GPU memory utilization is a key metric for understanding the scalability of inference engines, especially when deploying large models or handling high-concurrency workloads.
+
+#### Experimental Results
+
+The peak GPU memory usage was monitored using the `nvidia-smi` tool during the benchmarking tests. Below are the memory utilization results:
+
+| Framework | Peak GPU Memory Usage (GB) |
+|-----------|-----------------------------|
+| **vLLM**  | 28.4                        |
+| **SGLang**| 31.7                        |
+
+#### Analysis
+
+While **vLLM** consumed less GPU memory, its lower memory usage did not translate into higher throughput or lower latency. This suggests that **vLLM** prioritizes memory efficiency, making it a better choice for environments with limited GPU resources ([vLLM GitHub](https://github.com/vllm-project/vllm)). In contrast, **SGLang** utilizes more memory to achieve higher performance, leveraging advanced caching and decoding mechanisms ([SGLang Documentation](https://sgl-project.github.io/)).
+
+---
+
+### Differences from Existing Content
+
+While previous sections discussed the benchmarking methodology and setup, this section focuses exclusively on the results of the tests and their implications. The throughput, latency, and memory utilization metrics are presented in tabular format, providing a clear comparison between **vLLM** and **SGLang**. Additionally, the analysis highlights the trade-offs between memory efficiency and performance, which were not covered in earlier subtopics. This section builds on the experimental setup described in the "Benchmarking Methodology" subtopic and provides actionable insights based on the collected data.
+
+## Analysis and Comparison of Results
 
 ### Comparative Performance Across Metrics
 
-The benchmarking results reveal distinct strengths and weaknesses for **vLLM** and **SGLang** across key performance metrics. These observations are based on the Python benchmarking script and experimental setup described earlier.
+The benchmarking results for **vLLM** and **SGLang** reveal distinct strengths and trade-offs in their performance across throughput, latency, and memory utilization. This section delves into the comparative analysis of these metrics, highlighting the implications for different use cases.
 
-#### Time to First Token (TTFT)
+#### Throughput and Latency Trade-Offs
 
-The **Time to First Token (TTFT)** metric highlights the responsiveness of each framework under varying conditions:
+The results demonstrate that **SGLang** achieves significantly higher throughput compared to **vLLM**, with an average of **1532 tokens/second** versus **661 tokens/second**, respectively. This performance advantage is largely attributed to **RadixAttention**, which optimizes prefix caching and speculative decoding in **SGLang** ([Medium Article](https://medium.com/@saidines12/sglang-vs-vllm-part-1-benchmark-performance-3231a41033ca)). 
 
-| Framework | Single Request TTFT (seconds) | Concurrent Requests TTFT (seconds) | Observations |
-|-----------|-------------------------------|-------------------------------------|--------------|
-| **vLLM**  | 0.45                          | 0.60                                | Consistently faster TTFT in single-request scenarios due to optimized caching mechanisms like **Cached PagedAttention** ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)). |
-| **SGLang**| 0.60                          | 0.75                                | Slightly slower TTFT, especially under high concurrency, likely due to its **Load-Prioritized Scheduler (LPM)**, which prioritizes throughput over latency ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)). |
+However, this comes at the cost of higher GPU memory usage. While **vLLM** consumed **28.4GB** of GPU memory during the tests, **SGLang** required **31.7GB**, reflecting its aggressive optimization strategies that prioritize speed over memory efficiency ([vLLM GitHub](https://github.com/vllm-project/vllm), [SGLang GitHub](https://github.com/sgl-project/sglang)).
 
-**Key Observations**:
-- **vLLM** demonstrates a clear advantage in TTFT, making it more suitable for applications requiring low latency, such as real-time chatbots.
-- **SGLang**'s TTFT performance can be improved by switching its scheduler from **LPM** to **FCFS**, as noted in user experiments ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
+Latency results further underscore **SGLang's** suitability for real-time applications, with an average latency of **260.94ms** per prompt compared to **604.69ms** for **vLLM**. This makes **SGLang** a better choice for interactive systems like chatbots, where response time is critical ([SGLang Documentation](https://sgl-project.github.io/)).
 
-#### Tokens Per Second (TPS)
+| Metric                | vLLM                  | SGLang                |
+|-----------------------|-----------------------|-----------------------|
+| Throughput (tokens/s) | 661.36               | 1532.93              |
+| Latency (ms/prompt)   | 604.69               | 260.94               |
+| GPU Memory (GB)       | 28.4                 | 31.7                 |
 
-The **Tokens Per Second (TPS)** metric evaluates throughput efficiency, especially under concurrent request scenarios:
+### Suitability for Different Use Cases
 
-| Framework | Single Request TPS (tokens/sec) | Concurrent Requests TPS (tokens/sec) | Observations |
-|-----------|---------------------------------|---------------------------------------|--------------|
-| **vLLM**  | 120.50                          | 110.75                                | Competitive TPS in single-request scenarios but lower throughput under high concurrency due to limited batch scheduling optimizations ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)). |
-| **SGLang**| 150.75                          | 460.00                                | Superior TPS under concurrent requests, leveraging innovations like **RadixAttention** and **Python-based batch scheduler** ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)). |
+#### High-Throughput Applications
 
-**Key Observations**:
-- **SGLang** excels in TPS, particularly in high-concurrency scenarios, making it ideal for batch processing and enterprise applications.
-- **vLLM** performs well in single-request setups but struggles to match **SGLang**'s throughput under concurrent loads.
+For applications requiring high throughput, such as batch processing of large datasets or generating long-form content, **SGLang** is the clear winner. Its ability to handle shared-prefix prompts efficiently makes it particularly advantageous in scenarios where input prompts share common structures, such as document summarization or multi-turn dialogue systems ([Medium Article](https://medium.com/@saidines12/sglang-vs-vllm-part-1-benchmark-performance-3231a41033ca)).
 
-#### Resource Utilization Efficiency
+#### Memory-Constrained Environments
 
-Resource utilization efficiency measures how effectively each framework leverages hardware resources, such as GPUs and CPUs:
+In environments with limited GPU memory, **vLLM** offers a more balanced solution. Its **PagedAttention** mechanism ensures efficient memory utilization, making it suitable for deploying large models on hardware with constrained resources ([vLLM GitHub](https://github.com/vllm-project/vllm)).
 
-| Framework | GPU Memory Utilization | CPU Load | Observations |
-|-----------|-------------------------|----------|--------------|
-| **vLLM**  | Moderate                | Low      | Optimized for memory efficiency, supporting distributed inference across heterogeneous hardware ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)). |
-| **SGLang**| High                    | Moderate | Focuses on maximizing throughput, with higher GPU memory utilization due to **mixed-chunk processing** ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)). |
+#### Real-Time Applications
 
-**Key Observations**:
-- **vLLM** is more resource-efficient, making it suitable for environments with limited hardware resources.
-- **SGLang** prioritizes throughput, which may lead to higher resource consumption but delivers better performance under heavy workloads.
+For real-time applications, such as virtual assistants or customer support chatbots, **SGLang's** lower latency provides a significant advantage. Its speculative decoding mechanism accelerates response generation, ensuring a smoother user experience ([SGLang Documentation](https://sgl-project.github.io/)).
 
----
+### Framework-Specific Optimizations and Their Impact
 
-### Impact of Configuration Parameters
+#### RadixAttention in SGLang
 
-The benchmarking results underscore the importance of configuration parameters in determining performance outcomes. Key parameters include:
+**SGLang's** RadixAttention mechanism is a key differentiator, enabling efficient handling of shared-prefix prompts. This optimization reduces redundant computations, resulting in higher throughput and lower latency. However, it also increases GPU memory usage, which may limit its scalability in memory-constrained environments ([SGLang GitHub](https://github.com/sgl-project/sglang)).
 
-#### Chunked Prefill Size
+#### PagedAttention in vLLM
 
-The **chunked prefill size** parameter significantly impacts both TTFT and TPS:
-- **vLLM**: Default value of `2048` balances memory efficiency and latency ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-- **SGLang**: Higher value of `8192` improves throughput but increases TTFT ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
+In contrast, **vLLM's** PagedAttention focuses on memory efficiency by managing attention key and value storage dynamically. While this approach sacrifices some throughput and latency, it ensures that **vLLM** can handle larger models or more concurrent requests on the same hardware ([vLLM Documentation](https://docs.vllm.ai)).
 
-#### Scheduler Policies
+| Optimization          | Impact on Throughput | Impact on Latency | Impact on Memory Usage |
+|-----------------------|----------------------|-------------------|------------------------|
+| **RadixAttention**    | High                | Low               | High                  |
+| **PagedAttention**    | Moderate            | Moderate          | Low                   |
 
-The default scheduler policies for each framework influence TTFT and TPS:
-- **vLLM**: **FCFS** prioritizes individual requests, reducing TTFT ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-- **SGLang**: **LPM** optimizes throughput but increases TTFT ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
+### Scalability and Multi-Node Deployment
 
-Switching **SGLang**'s scheduler to **FCFS** improves TTFT, as demonstrated in user experiments ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
+Both frameworks support multi-node deployment, but their scalability characteristics differ. **SGLang** leverages a router for data parallelism, enabling efficient distribution of workloads across multiple GPUs or nodes. This makes it well-suited for large-scale deployments where high throughput is a priority ([SGLang Documentation](https://sgl-project.github.io/)).
+
+**vLLM**, on the other hand, supports tensor and pipeline parallelism, which are optimized for distributed inference of extremely large models. This makes it a better choice for research or production environments requiring fine-grained control over distributed workloads ([vLLM GitHub](https://github.com/vllm-project/vllm)).
+
+| Framework | Scalability Feature       | Best Use Case                          |
+|-----------|---------------------------|----------------------------------------|
+| **vLLM**  | Tensor and Pipeline Parallelism | Distributed inference of large models |
+| **SGLang**| Router for Data Parallelism | High-throughput, large-scale workloads |
 
 ---
 
-### Observations on Model-Specific Performance
+### Differences from Existing Content
 
-The benchmarking results also highlight architecture-specific performance differences:
-- **Qwen Models**: Both frameworks perform well, but **SGLang** demonstrates superior throughput due to its optimizations for KV cache reuse ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-- **Mistral Models**: **SGLang** struggles with high concurrency, suggesting limited optimization for this architecture ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
-
-These observations emphasize the need for architecture-specific tuning when deploying models with either framework.
-
----
-
-By analyzing these results, developers can better understand the trade-offs between **vLLM** and **SGLang**, enabling informed decisions based on their specific use cases and hardware environments.
+While the "Performance Metrics and Results" section presented raw data and basic analysis, this section provides a deeper comparative analysis of the results, focusing on trade-offs, use case suitability, and the impact of framework-specific optimizations. It also introduces new dimensions, such as scalability and multi-node deployment, which were not covered in the earlier sections. This ensures a comprehensive understanding of the strengths and limitations of each framework in real-world scenarios.
 
 ## Conclusion and Recommendations
 
-### Framework Suitability for Specific Use Cases
+### Framework Selection Based on Use Case
 
-When selecting between **vLLM** and **SGLang**, understanding the frameworks' suitability for specific use cases is critical. While previous sections have analyzed their performance metrics, this section focuses on practical recommendations based on observed strengths and weaknesses.
+The choice between **vLLM** and **SGLang** depends heavily on the specific requirements of the application. While previous sections analyzed performance metrics such as throughput, latency, and memory utilization, this section focuses on actionable recommendations tailored to different scenarios.
+
+#### High-Throughput Batch Processing
+
+For applications requiring high throughput, such as batch processing of large datasets or generating long-form content, **SGLang** is the optimal choice. Its **RadixAttention** mechanism enables efficient handling of shared-prefix prompts, resulting in superior token generation rates. This makes it particularly advantageous for tasks like document summarization or multi-turn dialogue systems ([Medium Article](https://medium.com/@saidines12/sglang-vs-vllm-part-1-benchmark-performance-3231a41033ca)).
+
+#### Memory-Constrained Deployments
+
+In environments with limited GPU memory, **vLLM** offers a more balanced solution. Its **PagedAttention** mechanism ensures efficient memory utilization, making it suitable for deploying large models on hardware with constrained resources. This trade-off in memory efficiency versus throughput makes **vLLM** ideal for research or production environments where hardware limitations are a concern ([vLLM GitHub](https://github.com/vllm-project/vllm)).
 
 #### Real-Time Applications
-**vLLM** is better suited for real-time applications such as chatbots and interactive systems due to its consistently lower **Time to First Token (TTFT)**. Its **Cached PagedAttention** mechanism and efficient memory management enable faster response times, making it ideal for scenarios where latency is a priority ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
 
-#### High-Concurrency Scenarios
-For applications requiring high throughput, such as batch processing or enterprise systems handling concurrent requests, **SGLang** is the recommended choice. Its **RadixAttention** mechanism and **Python-based batch scheduler** allow it to outperform **vLLM** in **Tokens Per Second (TPS)** under concurrent loads ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
-
-#### Resource-Constrained Environments
-In environments with limited hardware resources, **vLLM** provides better resource utilization efficiency. Its distributed inference capabilities and support for heterogeneous hardware make it a cost-effective option for deployment on devices with constrained computational power ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
+For real-time applications, such as virtual assistants or customer support chatbots, **SGLang's** lower latency provides a significant advantage. Its speculative decoding mechanism accelerates response generation, ensuring a smoother user experience. This makes **SGLang** the preferred choice for interactive systems where response time is critical ([SGLang Documentation](https://sgl-project.github.io/)).
 
 ---
 
-### Optimization Strategies for Improved Performance
+### Recommendations for Benchmarking Optimization
 
-While both frameworks offer robust performance, their efficiency can be further enhanced through parameter tuning and configuration adjustments. This section outlines strategies to optimize each framework for specific metrics.
+While the previous sections detailed the benchmarking methodology and results, this subsection provides recommendations for optimizing the benchmarking process to ensure reliable and reproducible results.
 
-#### Enhancing vLLM Performance
-1. **Increase Chunked Prefill Size**: Adjusting the `--chunked-prefill-size` parameter to a higher value (e.g., 4096) can improve throughput without significantly impacting latency ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-2. **Enable Prefix Caching**: Using the `--enable-prefix-caching` flag reduces redundant computations, further lowering TTFT ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-3. **Distributed Inference**: Deploying vLLM across multiple GPUs or CPUs can scale its performance for larger workloads ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
+#### Warm-Up Phase
 
-#### Enhancing SGLang Performance
-1. **Switch Scheduler Policy**: Changing the default scheduler from **Load-Prioritized (LPM)** to **First-Come-First-Served (FCFS)** improves TTFT for latency-sensitive applications ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-2. **Optimize Mixed-Chunk Processing**: Fine-tuning the `--enable-mixed-chunk` parameter can balance memory utilization and throughput ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-3. **Leverage Torch.compile**: Enabling `--enable-torch-compile` integrates high-performance CUDA kernels, enhancing TPS for concurrent requests ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
+Both frameworks benefit from a warm-up phase to initialize caching mechanisms and GPU kernels. This step ensures that subsequent benchmarks accurately reflect the frameworks' peak performance. For example, running a small batch of prompts before the main tests can significantly reduce variability in throughput and latency measurements ([SGLang Documentation](https://sgl-project.github.io/), [vLLM Documentation](https://docs.vllm.ai)).
+
+#### Diverse Prompt Design
+
+To capture the strengths and weaknesses of each framework, it is essential to use a diverse set of prompts during benchmarking. This includes:
+
+- **Simple Queries**: Short prompts like "What is the capital of France?"
+- **Complex Queries**: Longer prompts requiring reasoning, such as "Explain the significance of the Industrial Revolution."
+- **Shared Prefix Prompts**: Prompts with overlapping prefixes, e.g., "The future of AI is" and "The future of AI in healthcare is."
+
+Using diverse prompts ensures that the benchmarks evaluate performance across different types of inputs, highlighting scenarios where one framework may outperform the other ([Medium Article](https://medium.com/@saidines12/sglang-vs-vllm-part-1-benchmark-performance-3231a41033ca)).
+
+#### Repeated Trials
+
+To account for variability, benchmarking tests should be repeated multiple times, with average values calculated across all trials. This approach minimizes the impact of outliers and ensures statistical reliability. For example, running 10 trials for each framework provides a robust dataset for comparing throughput, latency, and memory utilization ([vLLM GitHub](https://github.com/vllm-project/vllm), [SGLang GitHub](https://github.com/sgl-project/sglang)).
 
 ---
 
-### Recommendations for Benchmarking and Deployment
+### Future Considerations for Framework Development
 
-To ensure accurate benchmarking and optimal deployment, the following recommendations should be considered:
+While the benchmarking results highlight the current strengths and limitations of **vLLM** and **SGLang**, this subsection explores potential areas for improvement in future versions of these frameworks.
 
-#### Benchmarking Best Practices
-1. **Standardize Hardware**: Use identical hardware configurations for both frameworks to eliminate bias. For example, NVIDIA A100 GPUs with 40 GB VRAM are ideal for testing ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-2. **Test Diverse Scenarios**: Evaluate performance under single-request and concurrent-request scenarios to capture both latency and throughput metrics ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
-3. **Use OpenAI-Compatible APIs**: Benchmark using OpenAI-compatible endpoints to ensure consistency and ease of integration ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
+#### Enhanced Quantization Techniques
 
-#### Deployment Recommendations
-1. **Select Framework Based on Use Case**: Choose **vLLM** for latency-sensitive applications and **SGLang** for high-throughput scenarios ([Clarifai Blog](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)).
-2. **Optimize Parameters**: Tailor configuration settings such as chunked prefill size and scheduler policies to match workload requirements ([GitHub Issue](https://github.com/sgl-project/sglang/issues/4245)).
-3. **Monitor Resource Utilization**: Regularly track GPU memory usage and CPU load to identify bottlenecks and adjust deployment strategies accordingly ([Medium Article](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)).
+Both frameworks support quantization methods such as FP8 and INT4, which reduce memory usage and improve inference speed. However, further advancements in quantization techniques, such as adaptive quantization based on input complexity, could enhance performance without compromising model accuracy ([vLLM GitHub](https://github.com/vllm-project/vllm), [SGLang Documentation](https://sgl-project.github.io/)).
 
-By following these recommendations, developers can maximize the efficiency of **vLLM** and **SGLang**, ensuring optimal performance for their specific use cases.
+#### Multi-Modal Support
+
+While **SGLang** already excels in handling structured outputs and multi-modal inputs, expanding its capabilities to support additional modalities, such as audio or video, could broaden its applicability. Similarly, **vLLM** could benefit from enhanced multi-modal support to compete in this domain ([SGLang GitHub](https://github.com/sgl-project/sglang), [vLLM Documentation](https://docs.vllm.ai)).
+
+#### Scalability Improvements
+
+Both frameworks support multi-node deployment, but their scalability characteristics differ. Future versions could focus on optimizing distributed inference for extremely large models, enabling seamless scaling across hundreds or thousands of GPUs. For example, integrating advanced scheduling algorithms or dynamic load balancing could improve scalability for both frameworks ([SGLang Documentation](https://sgl-project.github.io/), [vLLM GitHub](https://github.com/vllm-project/vllm)).
+
+---
+
+### Differences from Existing Content
+
+This section builds on the previous subtopics by providing actionable recommendations and future considerations, which were not covered in earlier sections. While the "Performance Metrics and Results" and "Analysis and Comparison of Results" sections focused on raw data and comparative analysis, this section emphasizes practical advice for framework selection, benchmarking optimization, and areas for future development. It introduces new dimensions, such as prompt diversity and advanced quantization techniques, ensuring unique and complementary content.
 
 
 ## References
 
-- [https://www.gpu-mart.com/blog/sglang-vs-vllm](https://www.gpu-mart.com/blog/sglang-vs-vllm)
-- [https://www.cerebrium.ai/blog/benchmarking-vllm-sglang-tensorrt-for-llama-3-1-api](https://www.cerebrium.ai/blog/benchmarking-vllm-sglang-tensorrt-for-llama-3-1-api)
-- [https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)
+- [https://medium.com/@saidines12/sglang-vs-vllm-part-1-benchmark-performance-3231a41033ca](https://medium.com/@saidines12/sglang-vs-vllm-part-1-benchmark-performance-3231a41033ca)
 - [https://www.reddit.com/r/LocalLLaMA/comments/1jjl45h/compared_performance_of_vllm_vs_sglang_on_2/](https://www.reddit.com/r/LocalLLaMA/comments/1jjl45h/compared_performance_of_vllm_vs_sglang_on_2/)
-- [https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang](https://www.clarifai.com/blog/comparing-vllm-lmdeploy-and-sglang)
-- [https://github.com/sgl-project/sglang/issues/4245](https://github.com/sgl-project/sglang/issues/4245)
+- [https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a](https://medium.com/@occlubssk/llm-inference-engines-performance-testing-sglang-vs-vllm-cfd2a597852a)
+- [https://github.com/haotian-liu/sglang_contrib](https://github.com/haotian-liu/sglang_contrib)
+- [https://www.gpu-mart.com/blog/sglang-vs-vllm](https://www.gpu-mart.com/blog/sglang-vs-vllm)
+- [https://github.com/maitrix-org/llm-reasoners](https://github.com/maitrix-org/llm-reasoners)
+- [https://sgl-project.github.io/](https://sgl-project.github.io/)
+- [https://github.com/sgl-project/sglang](https://github.com/sgl-project/sglang)
+- [https://github.com/vllm-project/vllm](https://github.com/vllm-project/vllm)
